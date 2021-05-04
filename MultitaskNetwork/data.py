@@ -1,19 +1,11 @@
 import torch
-import torchvision
-from glob import glob
 import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
 import pandas
 from torchvision import datasets, models, transforms
 import cv2
 import numpy as np
 import PIL
-import matplotlib.pyplot as plt
 import nibabel as nib
-from sklearn.model_selection import StratifiedKFold
-from sklearn import metrics
-from sklearn.metrics import roc_auc_score
 
 
 class Dataset_3d(torch.utils.data.Dataset):
