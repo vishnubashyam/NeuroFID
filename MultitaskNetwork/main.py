@@ -1,31 +1,21 @@
-import torch
-import torchvision
-from glob import glob
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-import pandas
-from torchvision import datasets, models, transforms
-import cv2
-import numpy as np
-import PIL
-import matplotlib.pyplot as plt
-import nibabel as nib
 from sklearn.model_selection import StratifiedKFold
-from sklearn import metrics
-from sklearn.metrics import roc_auc_score
+import torch
+import pandas
+import numpy as np
 from data import Dataset_3d
 from model import Model_3d
-from train import Train
+from train import Trainer
 
+# Setup for GPU Acceleration
 use_cuda = torch.cuda.is_available()
 device = torch.device("cuda" if use_cuda else "cpu")
-# torch.cuda.set_device(device)
 torch.backends.cudnn.benchmark = True
+
 
 params = {'batch_size': 8,
           'shuffle': True,
           'num_workers': 20}
+
 
 max_epochs = 100
 learning_rate = 0.0000015
@@ -33,9 +23,7 @@ momentum = 0.99
 
 
 net_path = "./weights/"
-
 data_dir = '/home/bashyamv/Research/Data/Amyloid_Scans/BrainAligned/'
-
 df = pandas.read_csv('/home/bashyamv/Research/Data/Amyloid_Scans/train_df_3d.csv')
 
 
@@ -44,6 +32,8 @@ skf.get_n_splits(df, df.amyloidStatus)
 
 fold=0
 for train_index, test_index in skf.split(df, df.amyloidStatus):
+
+    fold += 1
     train_df = df.iloc[train_index].reset_index(drop=True)
     val_df = df.iloc[test_index].reset_index(drop=True)
 
@@ -55,20 +45,12 @@ for train_index, test_index in skf.split(df, df.amyloidStatus):
 
     network = nn.DataParallel(Model_3d(8, 5)).to(device)
 
-    # network =model_3d(8, 0).to(device)/
-
-
     CUDA_LAUNCH_BLOCKING=1
-
     # network.load_state_dict(torch.load("./weights/20_model.pkl"))
-
     print(network)
 
-
-
-
-    optimizer = optim.SGD(network.parameters(), lr=learning_rate, momentum=momentum)
+    optimizer = torch.optim.Adam(network.parameters(), lr=learning_rate, momentum=momentum)
     criterion = torch.nn.BCELoss()
-    # scaler = torch.cuda.amp.GradScaler(enabled=True)
-    Train(30, fold, training_generator, validation_generator, network, optimizer, criterion)
-    fold+=1
+
+    trainer = Trainer(30, fold, training_generator, validation_generator, network, optimizer, criterion)
+    trainer.train_loop()

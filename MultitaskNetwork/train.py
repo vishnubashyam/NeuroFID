@@ -1,108 +1,104 @@
 import torch
-import torchvision
-from glob import glob
 import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-import pandas
-from torchvision import datasets, models, transforms
-import cv2
 import numpy as np
-import PIL
-import matplotlib.pyplot as plt
-import nibabel as nib
-from sklearn.model_selection import StratifiedKFold
-from sklearn import metrics
-from sklearn.metrics import roc_auc_score
 
 
+class Trainer:
+    def __init__(self, max_epochs, fold, training_generator, validation_generator, network, optimizer, criterion):
+        self.max_epochs = max_epochs
+        self.fold = fold
+        self.training_generator = training_generator
+        self.validation_generator = validation_generator
+        self.network = network
+        self.optimizer = optimizer
+        self.criterion = criterion
+        self.epoch = 0
 
-def Train(max_epochs, fold, training_generator, validation_generator, network, optimizer, criterion):
-
-# Loop over epochs
-    for epoch in range(1, max_epochs):
-        # Training
-        epoch_loss = 0
-        acc = 0.	# Accuracy
-        length = 0
-        iter = 0
-
-
-        for local_batch,aux_data, local_labels in training_generator:
-            network.train(True)
-
-            # Transfer to GPU
-            local_batch, aux_data, local_labels = local_batch.cuda(), aux_data.cuda() , local_labels.cuda()
-
-            optimizer.zero_grad()
-
-            # with torch.cuda.amp.autocast(enabled=True):
-
-            output = network(local_batch, aux_data)
-            SR_flat = output.view(output.size(0),-1)
-            GT_flat = local_labels.view(local_labels.size(0),-1).float()
-            loss = criterion(SR_flat, GT_flat)
-
-            #################
-            #MIXED PRECISION TRAINING#
-            #################
-
-            # scaler.step(optimizer)
-            # scaler.scale(loss).backward()
-            # scaler.update()
-            loss.backward()
-            iter+=1
-
-            optimizer.step()
-            acc += (np.mean((torch.where(SR_flat>0.5, 1,0)==GT_flat).detach().cpu().numpy()))
-            # print(acc)
-            length += local_batch.size(0)
-            if iter%50==0:
-                print(acc/iter)
-                print(loss)
-
-
-
-        acc = acc/(iter)
-
-
-
+    def __print_save_epoch(self, epoch, loss):
         print('Epoch [%d/%d], Loss: %.4f, \n[Training] Acc: %.4f ' % (
-    					  epoch+1, max_epochs, \
-    					  epoch_loss,\
-    					  acc))
+                epoch+1, max_epochs, \
+                epoch_loss,\
+                acc))
         best_net = network.state_dict()
         torch.save(best_net,net_path+ 'Fold_'+str(fold)+'_Epoch_' +str(epoch) + "_model.pkl")
 
 
+    def __train_epoch(self):
+
+        iter = 0
+        for img_batch, labels in self.training_generator:
+
+            # Enable Dropout and BatchNorm
+            self.network.train(True)
+
+            # Transfer to GPU
+            img_batch, labels = img_batch.cuda(), labels.cuda()
+
+            # Clear Gradients from Previous Pass
+            self.optimizer.zero_grad()
+
+            # Forward Pass and Loss Calculation
+            output = self.network(img_batch)
+            loss = self.criterion(output, labels)
+
+            # Backpropagation
+            loss.backward()
+            self.optimizer.step()
+            iter+=1
+
+
+    def __train_epoch_mixed_precision(self, scaler):
+                
+        iter = 0
+        for img_batch, labels in self.training_generator:
+
+            # Enable Dropout and BatchNorm
+            self.network.train(True)
+
+            # Transfer to GPU
+            img_batch, labels = img_batch.cuda(), labels.cuda()
+
+            #Clear Gradients from Previous Pass
+            self.optimizer.zero_grad()
+
+            with torch.cuda.amp.autocast(enabled=True):
+                # Forward Pass and Loss Calculation
+                output = self.network(img_batch)
+                loss = self.criterion(output, labels)
+            
+            # Backpropagation
+            scaler.step(self.optimizer)
+            scaler.scale(loss).backward()
+            scaler.update()
+            iter+=1
+
+            optimizer.step()
+
+
+    def __validation_epoch(self):
+
         # Validation
         predictions=torch.Tensor()
+
         with torch.set_grad_enabled(False):
-            for local_batch,aux_data, local_labels in validation_generator:
-                network.train(False)
+            for img_batch, labels in self.validation_generator:
+                #Turn Off Dropout
                 network.eval()
+
                 # Transfer to GPU
+                img_batch, labels = img_batch.cuda(), labels.cuda()
 
-                epoch_loss = 0
-                acc = 0.	# Accuracy
-                length = 0
-
-
-                local_batch, aux_data, local_labels = local_batch.cuda(), aux_data.cuda() , local_labels.cuda()
-
-                output = network(local_batch, aux_data)
+                output = network(img_batch, aux_data)
                 predictions = torch.cat((predictions, output.to('cpu')), dim=0)
-                # acc += (1-loss)
-                
-                length += local_batch.size(0)
-
-            # acc = acc/length
 
 
-            val_df['Pred'] = predictions.numpy().reshape(-1)
-            auc= roc_auc_score(val_df['amyloidStatus'], val_df['Pred'])
+    def train_loop(self):
 
-            val_df.to_csv("./weights/val_predictions"+'Fold_'+str(fold)+'_Epoch_' +str(epoch)+ "_AUC_"+str(auc)+".csv", index=False)
+        # Loop over epochs
+        for epoch in range(1, self.max_epochs):
 
-            # auc = metrics.auc(fpr, tpr)
-            print('[Validation] AUC: %.4f'%(auc))
+            self.epoch = epoch
+            # Training           
+            self.__train_epoch()
+            self.__validation_epoch()
+            self.__print_save_epoch()
