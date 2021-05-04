@@ -17,7 +17,7 @@ from sklearn.metrics import roc_auc_score
 
 
 
-def train(max_epochs, fold, training_generator, validation_generator, network, optimizer, criterion):
+def Train(max_epochs, fold, training_generator, validation_generator, network, optimizer, criterion):
 
 # Loop over epochs
     for epoch in range(1, max_epochs):

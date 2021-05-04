@@ -14,8 +14,9 @@ import nibabel as nib
 from sklearn.model_selection import StratifiedKFold
 from sklearn import metrics
 from sklearn.metrics import roc_auc_score
-import Data, Train, Model
-
+from data import Dataset_3d
+from model import Model_3d
+from train import Train
 
 use_cuda = torch.cuda.is_available()
 device = torch.device("cuda" if use_cuda else "cpu")
@@ -46,13 +47,13 @@ for train_index, test_index in skf.split(df, df.amyloidStatus):
     train_df = df.iloc[train_index].reset_index(drop=True)
     val_df = df.iloc[test_index].reset_index(drop=True)
 
-    training_set = Data.Dataset_3d(train_df, data_dir)
+    training_set = Dataset_3d(train_df, data_dir)
     training_generator = torch.utils.data.DataLoader(training_set, **params)
 
-    validation_set = Data.Dataset_3d(val_df, data_dir)
+    validation_set = Dataset_3d(val_df, data_dir)
     validation_generator = torch.utils.data.DataLoader(validation_set, **params)
 
-    network = nn.DataParallel(Model.model_3d(8, 5)).to(device)
+    network = nn.DataParallel(Model_3d(8, 5)).to(device)
 
     # network =model_3d(8, 0).to(device)/
 
@@ -69,5 +70,5 @@ for train_index, test_index in skf.split(df, df.amyloidStatus):
     optimizer = optim.SGD(network.parameters(), lr=learning_rate, momentum=momentum)
     criterion = torch.nn.BCELoss()
     # scaler = torch.cuda.amp.GradScaler(enabled=True)
-    Train.train(30, fold, training_generator, validation_generator, network, optimizer, criterion)
+    Train(30, fold, training_generator, validation_generator, network, optimizer, criterion)
     fold+=1

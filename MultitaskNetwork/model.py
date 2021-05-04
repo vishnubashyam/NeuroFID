@@ -17,9 +17,9 @@ from sklearn import metrics
 from sklearn.metrics import roc_auc_score
 
 
-class model_3d(nn.Module):
+class Model_3d(nn.Module):
     def __init__(self, base_filters, extra_features):
-        super(model_3d, self).__init__()
+        super(Model_3d, self).__init__()
         self.base_filters = base_filters
         self.extra_features = extra_features
 
@@ -40,7 +40,6 @@ class model_3d(nn.Module):
         self.fc1 = nn.Linear((base_filters*16 )+extra_features, base_filters*4)
         self.batch_norm = nn.BatchNorm1d(base_filters*4)
         self.fc2 = nn.Linear(base_filters*4,1)
-
 
 
 
