@@ -65,5 +65,4 @@ class Model_3d(nn.Module):
         x = self.dropout(x)
         # x = self.batch_norm(x)
         x = self.fc2(x)
-        x = self.Sigmoid(x)
         return x
