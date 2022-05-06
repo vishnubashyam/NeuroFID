@@ -1,10 +1,12 @@
 import torch
 import torch.nn as nn
 import numpy as np
-
+import pandas as pd
 
 class Trainer:
-    def __init__(self, max_epochs, fold, training_generator, validation_generator, network, optimizer, criterion):
+    def __init__(self, max_epochs, fold, training_generator, 
+                validation_generator, network, optimizer, criterion,
+                output_path, device):
         self.max_epochs = max_epochs
         self.fold = fold
         self.training_generator = training_generator
@@ -13,15 +15,9 @@ class Trainer:
         self.optimizer = optimizer
         self.criterion = criterion
         self.epoch = 0
-
-    def __print_save_epoch(self, epoch, loss):
-        pass
-        # print('Epoch [%d/%d], Loss: %.4f, \n[Training] Acc: %.4f ' % (
-        #         epoch+1, max_epochs, \
-        #         epoch_loss,\
-        #         acc))
-        # best_net = network.state_dict()
-        # torch.save(best_net,net_path+ 'Fold_'+str(fold)+'_Epoch_' +str(epoch) + "_model.pkl")
+        self.output_path = output_path
+        self.device = device
+        self.saved_model_path = []
 
 
     def __train_epoch(self):
@@ -37,7 +33,8 @@ class Trainer:
             img_batch, labels = img_batch.cuda(), labels.cuda()
 
             # Clear Gradients from Previous Pass
-            self.optimizer.zero_grad()
+            for param in self.network.parameters():
+                param.grad = None
 
             # Forward Pass and Loss Calculation
             output = self.network(img_batch)
@@ -46,8 +43,8 @@ class Trainer:
             # Backpropagation
             loss.backward()
             epoch_loss.append(loss.item())
-
-            print(np.mean(epoch_loss))
+            if iter%50==0:
+                print(f'Iteration: {iter}  Loss: {np.mean(epoch_loss)}')
             self.optimizer.step()
             iter+=1
         return epoch_loss
@@ -79,7 +76,8 @@ class Trainer:
             scaler.update()
 
             epoch_loss.append(loss.item())
-            print(np.mean(epoch_loss))
+            if iter%1==0:
+                print(f'Iteration: {iter}  Loss: {np.mean(epoch_loss)}')
             iter+=1
         return epoch_loss
 
@@ -96,7 +94,7 @@ class Trainer:
                 # Transfer to GPU
                 img_batch, labels = img_batch.cuda(), labels.cuda()
 
-                output = self.netwoexirk(img_batch, labels)
+                output = self.network(img_batch)
                 predictions = torch.cat((predictions, output.to('cpu')), dim=0)
                 labels_all = torch.cat((labels_all, labels.to('cpu')), dim=0)
 
@@ -108,12 +106,12 @@ class Trainer:
         # Validation
         predictions, labels = self.__get_predictions(self.validation_generator)
 
-        val_mae_epoch = torch.mean(torch.abs(predictions - labels))
+        val_mae_epoch = float(torch.mean(torch.abs(predictions - labels)).cpu().numpy())
         print("Validation MAE: ", round(val_mae_epoch, 3))
 
         return val_mae_epoch   
 
-    def train_loop(self, amp = False):
+    def train_loop(self, validation = True, save_models = True, amp = False):
 
         epochs_loss_train = []
         epochs_mae_val = []
@@ -129,10 +127,37 @@ class Trainer:
             else:
                 loss = self.__train_epoch()
 
-            epochs_loss_train.append(loss)
-            val_mae = self.__validation_epoch()
-            epochs_mae_val.append(val_mae)
+            if validation:
+                epochs_loss_train.append(loss)
+                val_mae = self.__validation_epoch()
+                epochs_mae_val.append(val_mae)
 
-        # Save results into class varibles
-        self.epochs_loss_train = epochs_loss_train
-        self.epochs_mae_val = epochs_mae_val
+                if save_models:
+                    torch.save(
+                        self.network.state_dict(),
+                        self.output_path + 'Fold_'+str(self.fold)+'_Epoch_' + \
+                        str(epoch) +'_valScore_' +str(round(val_mae, 2))+ "_model.pkl")
+                    self.saved_model_path.append(
+                        str(self.output_path + 'Fold_'+str(self.fold)+'_Epoch_' + \
+                        str(epoch) +'_valScore_' +str(round(val_mae, 2))+ "_model.pkl"))
+
+            # Save results into class varibles
+        if validation:
+            self.epochs_loss_train = epochs_loss_train
+            self.epochs_mae_val = epochs_mae_val
+
+
+    def test_loop(self, test_generator, test_set, prediction_output_path):
+        best_epoch = np.argmin(self.epochs_mae_val)
+        print(best_epoch)
+        print(self.epochs_mae_val)
+        best_model = self.saved_model_path[best_epoch]
+        print(f'\nEpoch {best_epoch+1} performed best on the validation set\nGenerating Predictions')
+        self.network.load_state_dict(torch.load(best_model))
+        predictions, labels = self.__get_predictions(test_generator)
+        out_data = pd.DataFrame(predictions.numpy())
+        out_data_label = pd.DataFrame(labels.numpy()) # CV
+        df = pd.concat([out_data,out_data_label], axis=1)
+        df['file_name'] = test_set.list_IDs.file_name
+        df.to_csv(prediction_output_path, index=False)
+        print(f'Predictions saved to {prediction_output_path}')

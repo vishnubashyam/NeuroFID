@@ -3,7 +3,7 @@
 
 tempImg=`pwd`/'../Templates/MNI152_T1_1mm_brain_LPS_filled.nii.gz'
 
-listImg='../Lists/ISTAGING_MasterList_FID.csv'
+listImg='../Lists/missing.csv'
 outDir=`pwd`/'../BrainAligned'
 
 
@@ -17,7 +17,6 @@ for ll in `sed 1d $listImg`; do
     id=`echo $ll | cut -d, -f1`
     imgT1=`echo $ll | cut -d, -f8`
     imgB=`echo $ll | cut -d, -f10`
-
 
 
     outT1="${outDir}/${id}_T1_BrainAligned.nii.gz"
