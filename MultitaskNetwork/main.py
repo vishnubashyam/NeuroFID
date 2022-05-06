@@ -2,8 +2,8 @@ from sklearn.model_selection import StratifiedKFold,  train_test_split
 import torch
 import pandas
 import numpy as np
-from data import Dataset_3d
-from model import Model_3d, resnet50, resnet34
+from data import Dataset_ROI
+from model_ROI import Model_ROI
 from train import Trainer
 
 # Setup for GPU Acceleration
@@ -55,23 +55,24 @@ for train_index, test_index in skf.split(df, df.SEX):
     val_df = df.iloc[val_index].reset_index(drop=True)
     test_cv_df = df.iloc[test_index].reset_index(drop=True)
 
-    training_set = Dataset_3d(train_df, data_dir)
+    training_set = Dataset_ROI(train_df, data_dir)
     training_generator = torch.utils.data.DataLoader(training_set, **params)
-    validation_set = Dataset_3d(val_df, data_dir)
+    validation_set = Dataset_ROI(val_df, data_dir)
     validation_generator = torch.utils.data.DataLoader(validation_set, **params_test)
-    testing_cv_set = Dataset_3d(test_cv_df, data_dir)
+    testing_cv_set = Dataset_ROI(test_cv_df, data_dir)
     testing_cv_generator = torch.utils.data.DataLoader(testing_cv_set, **params_test)
 
     per_target_heads = get_per_target_heads(training_set, training_set.targets)
-    # network = torch.nn.DataParallel(Model_3d(8, 5)).to(device)
-    network = resnet34( sample_size= 182, sample_duration = 182).to(device)
-    # network = Model_3d(8, 2).to(device)
+    network = Model_ROI(targets, per_target_heads, df.columns.str.contains('MUSE').sum()).to(device)
 
     # network.load_state_dict(torch.load("./weights/20_model.pkl"))
     print(network)
 
     optimizer = torch.optim.Adam(network.parameters(), lr=learning_rate)
-    criterion = torch.nn.MSELoss()
+    criterion = {
+        "Numerical": torch.nn.MSELoss(),
+        "Categorical": torch.nn.CrossEntropyLoss()}
+
 
     print('--Starting Training--')
     trainer = Trainer(
