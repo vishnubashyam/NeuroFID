@@ -6,7 +6,7 @@ import pandas as pd
 class Trainer:
     def __init__(self, max_epochs, fold, training_generator, 
                 validation_generator, network, optimizer, criterion,
-                output_path, device):
+                output_path, device, target_type):
         self.max_epochs = max_epochs
         self.fold = fold
         self.training_generator = training_generator
@@ -18,19 +18,20 @@ class Trainer:
         self.output_path = output_path
         self.device = device
         self.saved_model_path = []
-
-
+        self.target_type = target_type
+        self.weights = torch.ones(18)
+        
     def __train_epoch(self):
 
         iter = 0
         epoch_loss = []
-        for img_batch, labels in self.training_generator:
+        for img_batch, labels, masks in self.training_generator:
 
             # Enable Dropout and BatchNorm
             self.network.train(True)
 
             # Transfer to GPU
-            img_batch, labels = img_batch.cuda(), labels.cuda()
+            img_batch, labels, masks = img_batch.cuda(), labels.cuda(), masks.cuda()
 
             # Clear Gradients from Previous Pass
             for param in self.network.parameters():
@@ -38,7 +39,15 @@ class Trainer:
 
             # Forward Pass and Loss Calculation
             output = self.network(img_batch)
-            loss = self.criterion(output.view(-1), labels)
+
+            # Multitask Loss Calculation
+            losses = 0
+            for target_type, label, pred, mask, weight in zip(self.target_types, labels, output, masks, self.loss_weights):
+                loss_tmp = criterion[target_type](label[mask].float(), pred[mask].float())
+                
+                if not loss_tmp.isnan():
+                    losses += loss_tmp * weight
+            print(losses)
 
             # Backpropagation
             loss.backward()
@@ -49,37 +58,6 @@ class Trainer:
             iter+=1
         return epoch_loss
 
-
-    def __train_epoch_mixed_precision(self, scaler):
-                
-        iter = 0
-        epoch_loss = []
-        for img_batch, labels in self.training_generator:
-
-            # Enable Dropout and BatchNorm
-            self.network.train(True)
-
-            # Transfer to GPU
-            img_batch, labels = img_batch.cuda(), labels.cuda()
-
-            #Clear Gradients from Previous Pass
-            self.optimizer.zero_grad()
-
-            with torch.cuda.amp.autocast(enabled=True):
-                # Forward Pass and Loss Calculation
-                output = self.network(img_batch)
-                loss = self.criterion(output.view(-1), labels)
-            
-            # Backpropagation
-            scaler.scale(loss).backward()
-            scaler.step(self.optimizer)
-            scaler.update()
-
-            epoch_loss.append(loss.item())
-            if iter%1==0:
-                print(f'Iteration: {iter}  Loss: {np.mean(epoch_loss)}')
-            iter+=1
-        return epoch_loss
 
     def __get_predictions(self, generator):
 
@@ -121,11 +99,7 @@ class Trainer:
             self.epoch = epoch
             print('--Epoch: ' + str(epoch) + '--')
             # Training           
-            if amp:
-                scaler = torch.cuda.amp.GradScaler()
-                loss = self.__train_epoch_mixed_precision(scaler)
-            else:
-                loss = self.__train_epoch()
+            loss = self.__train_epoch()
 
             if validation:
                 epochs_loss_train.append(loss)

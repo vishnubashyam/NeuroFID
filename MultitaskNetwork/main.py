@@ -35,12 +35,15 @@ df = pandas.read_csv('/cbica/home/bashyamv/comp_space/1_Projects/15_NeuroFID/Neu
 def get_per_target_heads(training_set, targets)
     ## Get the number of output nodes needed for each task
     per_target_heads = []
+    target_type = []
     for target in targets:
         if list(target.values())[0]['Type'] == 'Categorical':
             per_target_heads.append(len(training_set.labels[(list(target.keys())[0])].dropna().unique()))
+            target_type.append('Categorical')
         else:
             per_target_heads.append(1)
-        return per_target_heads
+            target_type.append('Numerical')
+        return per_target_heads, target_type
 
 
 skf = StratifiedKFold(n_splits=5)
@@ -62,7 +65,7 @@ for train_index, test_index in skf.split(df, df.SEX):
     testing_cv_set = Dataset_ROI(test_cv_df, data_dir)
     testing_cv_generator = torch.utils.data.DataLoader(testing_cv_set, **params_test)
 
-    per_target_heads = get_per_target_heads(training_set, training_set.targets)
+    per_target_heads, target_type = get_per_target_heads(training_set, training_set.targets)
     network = Model_ROI(targets, per_target_heads, df.columns.str.contains('MUSE').sum()).to(device)
 
     # network.load_state_dict(torch.load("./weights/20_model.pkl"))
@@ -84,7 +87,9 @@ for train_index, test_index in skf.split(df, df.SEX):
         optimizer = optimizer,
         criterion = criterion,
         output_path = net_path,
-        device = device)
+        device = device,
+        target_type = target_type
+        )
 
     trainer.train_loop(
         validation = True,
