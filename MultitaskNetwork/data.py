@@ -1,10 +1,11 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import pandas
 import numpy as np
 import PIL
 import nibabel as nib
-
+from sklearn.preprocessing import StandardScaler
 
 class Dataset_3d(torch.utils.data.Dataset):
   def __init__(self, list_IDs, data_dir, transforms=None):
@@ -32,24 +33,22 @@ class Dataset_3d(torch.utils.data.Dataset):
 
 
 
-params = {
-    'batch_size': 2,
-    'shuffle': False,
-    'num_workers': 0}
-
-
-
 class Dataset_ROI(torch.utils.data.Dataset):
     def __init__(self, df, targets, transforms=None):
         self.df = df
         self.targets = targets
         self.labels = self.process_targets(self.df, self.targets)
         self.labels_raw = self.labels.values
-        self.data = self.df.iloc[:,self.df.columns.str.contains('MUSE')].values
+        self.data = self.df.iloc[:,self.df.columns.str.contains('MUSE')].fillna(0).values
+        self.data_enc = self.scale_features(self.data)
         self.per_target_heads, self.target_types = self.get_per_target_heads()
         self.labels_enc, self.masks = self.encode_labels()
 
-    def process_numerical(self, nput_series):
+    def scale_features(self, data):
+        scl = StandardScaler()
+        return scl.fit_transform(data)
+
+    def process_numerical(self, input_series):
         scaler = StandardScaler()
         series_out = scaler.fit_transform(input_series.values.reshape(-1, 1))
         return series_out, scaler
@@ -64,8 +63,8 @@ class Dataset_ROI(torch.utils.data.Dataset):
         if target_size>1:
             test_dat = torch.Tensor(labels)
             loss_mask = ~torch.isnan(test_dat)
-            output_tensor = torch.zeros((test_dat.shape[0], target_size)).long()
-            output_tensor[loss_mask] = F.one_hot((test_dat[loss_mask]).long())
+            output_tensor = torch.zeros((test_dat.shape[0])).long()
+            output_tensor[loss_mask] = ((test_dat[loss_mask]).long())
         else:
             output_tensor = torch.Tensor(labels)
             loss_mask = ~torch.isnan(output_tensor)
@@ -87,9 +86,9 @@ class Dataset_ROI(torch.utils.data.Dataset):
             target = (list(col.keys())[0])
             target_type = (list(col.values())[0]['Type'])
             if target_type == 'Numerical':
-                df[target] = process_numerical(df[target])[0]
+                df[target] = self.process_numerical(df[target])[0]
             if target_type == 'Categorical':
-                df[target] = process_categorical(df[target]).values
+                df[target] = self.process_categorical(df[target]).values
             included.append(target)
         return df[included]
     
@@ -117,7 +116,7 @@ class Dataset_ROI(torch.utils.data.Dataset):
             masks.append(self.masks[i][index])
 
         
-        features = self.data[index]
+        features = self.data_enc[index]
         features = torch.from_numpy(features).float()
 
         return features, labels, masks
