@@ -1,0 +1,13 @@
+spyder==5.0.1
+tqdm
+nibabel
+pandas
+numpy
+matplotlib
+scipy
+scikit-learn
+seaborn
+pillow
+monai
+pytorch_lightning
+torchmetrics

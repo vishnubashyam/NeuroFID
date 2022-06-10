@@ -1,0 +1,66 @@
+{
+    "Target_Varibles":
+    [
+       {"Age": 
+       {
+           "Type":"Numerical"
+       } },
+       {"MMSE Interpolated": 
+       {
+           "Type":"Numerical"
+       } },
+       {"Education Years Interpolated": 
+       {
+           "Type":"Numerical"
+       } },
+       {"APOE Genotype Interpolated": 
+       {
+           "Type":"Categorical"
+       } },
+       {"CDR Global Interpolated": 
+       {
+           "Type":"Numerical"
+       } },
+       {"Abeta CSF Interpolated": 
+       {
+           "Type":"Numerical"
+       } },
+       {"Tau CSF Interpolated": 
+       {
+           "Type":"Numerical"
+       } },
+       {"Diabetes Interpolated": 
+       {
+           "Type":"Categorical"
+       } },
+       {"Hyperlipidemia Interpolated": 
+       {
+           "Type":"Categorical"
+       } },
+       {"Hypertension Interpolated": 
+       {
+           "Type":"Categorical"
+       } },
+
+       {"BMI Interpolated": 
+       {
+           "Type":"Numerical"
+       } },
+       {"Smoking Interpolated": 
+       {
+           "Type":"Categorical"
+       } },
+       {"Digit Span Forward Interpolated": 
+       {
+           "Type":"Numerical"
+       } },
+       {"Fluid Intelligence Interpolated": 
+       {
+           "Type":"Numerical"
+       } },
+       {"BNT Interpolated": 
+       {
+           "Type":"Numerical"
+       } }
+   ]
+}

@@ -6,7 +6,7 @@ import pandas as pd
 class Trainer:
     def __init__(self, max_epochs, fold, training_generator, 
                 validation_generator, network, optimizer, criterion,
-                output_path, device):
+                output_path, device, target_types, targets):
         self.max_epochs = max_epochs
         self.fold = fold
         self.training_generator = training_generator
@@ -18,19 +18,25 @@ class Trainer:
         self.output_path = output_path
         self.device = device
         self.saved_model_path = []
-
-
+        self.target_types = target_types
+        self.targets = targets
+        self.loss_weights = torch.ones(18)
+        
     def __train_epoch(self):
 
         iter = 0
         epoch_loss = []
-        for img_batch, labels in self.training_generator:
+        for img_batch, labels_tmp, masks_tmp in self.training_generator:
 
             # Enable Dropout and BatchNorm
             self.network.train(True)
 
             # Transfer to GPU
-            img_batch, labels = img_batch.cuda(), labels.cuda()
+            img_batch = img_batch.cuda()
+            labels, masks = [], []
+            for label, mask in zip(labels_tmp, masks_tmp):
+                labels.append(label.cuda())
+                masks.append(mask.cuda())
 
             # Clear Gradients from Previous Pass
             for param in self.network.parameters():
@@ -38,11 +44,26 @@ class Trainer:
 
             # Forward Pass and Loss Calculation
             output = self.network(img_batch)
-            loss = self.criterion(output.view(-1), labels)
 
+            # Multitask Loss Calculation
+            losses = torch.tensor(0.0, requires_grad=True).cuda()
+            
+            for target_type, label, pred, mask, weight in zip(self.target_types, labels, output, masks, self.loss_weights):
+                # print(target_type)
+                # print(label[mask])
+                # print(pred[mask])
+                if target_type == 'Numerical':
+                    loss_tmp = self.criterion[target_type](pred[mask].view(-1), label[mask].float())
+                else:
+                    loss_tmp = self.criterion[target_type](pred[mask], label[mask].long())
+
+                if not loss_tmp.isnan():
+                    losses += loss_tmp * weight
+            
+            # print(losses)
             # Backpropagation
-            loss.backward()
-            epoch_loss.append(loss.item())
+            losses.backward()
+            epoch_loss.append(losses.item())
             if iter%50==0:
                 print(f'Iteration: {iter}  Loss: {np.mean(epoch_loss)}')
             self.optimizer.step()
@@ -50,66 +71,58 @@ class Trainer:
         return epoch_loss
 
 
-    def __train_epoch_mixed_precision(self, scaler):
-                
-        iter = 0
-        epoch_loss = []
-        for img_batch, labels in self.training_generator:
-
-            # Enable Dropout and BatchNorm
-            self.network.train(True)
-
-            # Transfer to GPU
-            img_batch, labels = img_batch.cuda(), labels.cuda()
-
-            #Clear Gradients from Previous Pass
-            self.optimizer.zero_grad()
-
-            with torch.cuda.amp.autocast(enabled=True):
-                # Forward Pass and Loss Calculation
-                output = self.network(img_batch)
-                loss = self.criterion(output.view(-1), labels)
-            
-            # Backpropagation
-            scaler.scale(loss).backward()
-            scaler.step(self.optimizer)
-            scaler.update()
-
-            epoch_loss.append(loss.item())
-            if iter%1==0:
-                print(f'Iteration: {iter}  Loss: {np.mean(epoch_loss)}')
-            iter+=1
-        return epoch_loss
-
     def __get_predictions(self, generator):
 
         predictions=torch.Tensor()
         labels_all=torch.Tensor()
+        masks_all=torch.Tensor()
 
         with torch.set_grad_enabled(False):
-            for img_batch, labels in generator:
+            total_loss = []
+
+            for img_batch, labels_tmp, masks_tmp in generator:
                 #Turn Off Dropout
                 self.network.eval()
 
                 # Transfer to GPU
-                img_batch, labels = img_batch.cuda(), labels.cuda()
+                img_batch = img_batch.cuda()
+                labels, masks = [], []
+                for label, mask in zip(labels_tmp, masks_tmp):
+                    labels.append(label.cuda())
+                    masks.append(mask.cuda())
+
 
                 output = self.network(img_batch)
-                predictions = torch.cat((predictions, output.to('cpu')), dim=0)
-                labels_all = torch.cat((labels_all, labels.to('cpu')), dim=0)
+                losses = torch.tensor(0.0, requires_grad=False).cuda()
 
-        return predictions, labels_all
+                for target_type, label, pred, mask, weight in zip(self.target_types, labels, output, masks, self.loss_weights):
+                    if target_type == 'Numerical':
+                        loss_tmp = self.criterion[target_type](pred[mask].view(-1), label[mask].float())
+                    else:
+                        loss_tmp = self.criterion[target_type](pred[mask], label[mask].long())
+
+                    if not loss_tmp.isnan():
+                        losses += loss_tmp * weight
+                total_loss.append(losses.item())       
+
+                predictions, labels_all, masks_all = {}, {}, {}
+                for target, label, pred, mask in zip(self.targets, labels, output, masks):
+                    labels_all[list(target.keys())[0]] = label.to('cpu').numpy()
+                    predictions[list(target.keys())[0]] = pred.to('cpu').numpy()
+                    masks_all[list(target.keys())[0]] = mask.to('cpu').numpy()
+
+        return predictions, labels_all, masks_all, total_loss
 
 
     def __validation_epoch(self):
 
         # Validation
-        predictions, labels = self.__get_predictions(self.validation_generator)
+        predictions, labels, masks, loss = self.__get_predictions(self.validation_generator)
 
-        val_mae_epoch = float(torch.mean(torch.abs(predictions - labels)).cpu().numpy())
-        print("Validation MAE: ", round(val_mae_epoch, 3))
+        val_loss = np.mean(loss)
+        print("Validation Loss: ", str(val_loss))
 
-        return val_mae_epoch   
+        return val_loss   
 
     def train_loop(self, validation = True, save_models = True, amp = False):
 
@@ -121,11 +134,7 @@ class Trainer:
             self.epoch = epoch
             print('--Epoch: ' + str(epoch) + '--')
             # Training           
-            if amp:
-                scaler = torch.cuda.amp.GradScaler()
-                loss = self.__train_epoch_mixed_precision(scaler)
-            else:
-                loss = self.__train_epoch()
+            loss = self.__train_epoch()
 
             if validation:
                 epochs_loss_train.append(loss)

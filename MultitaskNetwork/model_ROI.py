@@ -17,9 +17,10 @@ class Model_ROI(nn.Module):
             
     def build_backbone(self):
         backbone = nn.Sequential(
-              nn.Linear(self.num_features, 100),
+              nn.Linear(self.num_features, 500),
               nn.ReLU(inplace=True),
-              nn.Linear(100, 10))
+            #   nn.BatchNorm1d(500),
+              nn.Linear(500, 20))
         return backbone
         
     def build_multihead(self):
@@ -28,16 +29,16 @@ class Model_ROI(nn.Module):
             
             if list(task_type.values())[0]['Type'] == 'Categorical':
                 self.heads.append(nn.Sequential(
-                    nn.Linear(10, nout * 2),
+                    nn.Linear(20, nout * 2),
                     nn.ReLU(inplace=True),
                     nn.Linear(nout * 2, nout),
-                    nn.Softmax()))
+                    nn.Softmax(1)))
                 
             if list(task_type.values())[0]['Type'] == 'Numerical':                
                 self.heads.append(nn.Sequential(
-                    nn.Linear(10, nout * 2),
+                    nn.Linear(20, nout * 2),
                     nn.ReLU(inplace=True),
-                    nn.Linear(nout * 2, nout)))
+                    nn.Linear(nout * 2, 1)))
 
         return self.heads
         
