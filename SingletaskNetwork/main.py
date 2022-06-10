@@ -88,7 +88,7 @@ elif args.model_size == 50:
         PATH_PRETRAINED_WEIGHTS,
         model_constructor=resnet50)
 
-model = LitBrainMRI(net = net, pretrained_params=None, lr=0.000608, optimizer=Adamax)
+model = LitBrainMRI(net = net, pretrained_params=None, lr=0.0006, optimizer=Adamax)
 fine = FineTuneCB(unfreeze_epoch=1)
 swa = pl.callbacks.StochasticWeightAveraging(swa_epoch_start=0.6)
 
