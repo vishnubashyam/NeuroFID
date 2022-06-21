@@ -8,6 +8,7 @@ import pandas as pd
 
 from pytorch_lightning import LightningDataModule
 from rising.loading import DataLoader
+from monai.data import NibabelReader
 
 
 class Dataset_3d(torch.utils.data.Dataset):
@@ -22,6 +23,7 @@ class Dataset_3d(torch.utils.data.Dataset):
 		self.data_dir = data_dir
 		self.transforms = transforms
 		self.mode = mode
+		self.reader = NibabelReader()
 
 	def __len__(self) -> int:
 		return self.csv.shape[0]
@@ -32,7 +34,16 @@ class Dataset_3d(torch.utils.data.Dataset):
 		vol_size: Optional[Tuple[int, int, int]] = None,
 		percentile: Optional[float] = 0.01,
 	) -> torch.Tensor:
+		"""_summary_
 
+		Args:
+			scan_path (Path): _description_
+			vol_size (Optional[Tuple[int, int, int]], optional): _description_. Defaults to None.
+			percentile (Optional[float], optional): _description_. Defaults to 0.01.
+
+		Returns:
+			torch.Tensor: _description_
+		"""
 		img_path = self.data_dir / (scan_path)
 		# print('Path: ' + str(img_path))
 		assert img_path.exists()
@@ -43,7 +54,7 @@ class Dataset_3d(torch.utils.data.Dataset):
 		# Temporary fix to make MRI data square
 		img = img[:, :, 18:-18, :]
 
-		img = torch.from_numpy(img).float()
+		img = torch.from_numpy(img).to(dtype=torch.float16)
 
 		# Normalize
 		if percentile:
@@ -58,6 +69,7 @@ class Dataset_3d(torch.utils.data.Dataset):
 		labels = self.csv["Label"][index]
 
 		img = self.load_image(scan_path=Path(subject_id))
+
 		if self.transforms:
 			img = self.transforms(img)
 
@@ -66,6 +78,7 @@ class Dataset_3d(torch.utils.data.Dataset):
 		Y = torch.from_numpy(Y).float()
 
 		return {"data": img, "label": Y}
+
 
 
 class Scans3dDM(LightningDataModule):
@@ -118,21 +131,23 @@ class Scans3dDM(LightningDataModule):
 		self.train_dataset = Dataset_3d(
 			data_dir=self.data_dir,
 			csv=self.train_df,
+			transforms=self.train_transforms,
 			mode='train')
 		self.valid_dataset = Dataset_3d(
 			data_dir=self.data_dir,
 			csv=self.validation_df,
+			transforms=self.valid_transforms,
 			mode='validation')
 		self.test_dataset = Dataset_3d(
 			data_dir=self.data_dir,
 			csv=self.test_df,
+			transforms=self.valid_transforms,
 			mode='test')
 
 	def train_dataloader(self) -> DataLoader:
 		return DataLoader(
 			self.train_dataset,
 			shuffle=True,
-			batch_transforms=self.train_transforms,
 			**self.dl_defaults,
 			**self.kwargs_dataloader,
 		)
@@ -141,7 +156,6 @@ class Scans3dDM(LightningDataModule):
 		return DataLoader(
 			self.valid_dataset,
 			shuffle=False,
-			batch_transforms=self.valid_transforms,
 			**self.dl_defaults,
 			**self.kwargs_dataloader,
 		)
@@ -150,7 +164,6 @@ class Scans3dDM(LightningDataModule):
 		return DataLoader(
 			self.test_dataset,
 			shuffle=False,
-			batch_transforms=self.valid_transforms,
 			**self.dl_defaults,
 			**self.kwargs_dataloader,
 		)

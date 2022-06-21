@@ -27,7 +27,22 @@ timeout 2700 nvidia-smi --query-gpu=timestamp,name,pci.bus_id,temperature.gpu,ut
 
 # Main Script
 # CUDA_VISIBLE_DEVICES=0,1 python3 main.py
-python3 main.py  --experiment $1 --data_csv $2 --model_size $3 --batch_size $4
+python3 main.py  \
+  --experiment $1 \
+  --experiment_type $6 \
+  --experiment_tag $7 \
+  --prediction_endpoint $5 \
+  --data_csv  $2 \
+  --data_dir /cbica/home/bashyamv/comp_space/1_Projects/15_NeuroFID/NeuroFID/DataPrep/Preprocessing/BrainAligned \
+  --dataloader_num_processes 4 \
+  --model_size $3 \
+  --pretrained_weights \
+  --batch_size $4 \
+  --max_epochs 10 \
+  --optimizer Adam \
+  --accumulate_grad_batches 2 \
+  --mixed_precision
+
 
 # Stop GPU Logging
 pkill timeout
