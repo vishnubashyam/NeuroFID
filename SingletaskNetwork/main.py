@@ -1,6 +1,7 @@
 from dis import pretty_flags
 import numpy as np
 import os
+from time import gmtime, strftime
 
 from rising.loading import DataLoader, default_transform_call
 from monai.networks.nets import resnet10, resnet18, resnet34, resnet50, SEResNet50
@@ -74,21 +75,32 @@ model = LitBrainMRI(
 fine = FineTuneCB(unfreeze_epoch=1)
 swa = pl.callbacks.StochasticWeightAveraging(swa_epoch_start=0.6)
 
-ckpt = pl.callbacks.ModelCheckpoint(
-    dirpath = 'ModelCheckpoints',
-    monitor={
-        'Regression':'valid/corr',
-        'Classification':'valid/auroc'
-        }[args.experiment_type],
-    save_top_k=5,
-    save_last=True,
-    filename='checkpoint/{epoch:02d}-{valid/mae:.4f}',
-    mode='max',
-)
+monitor = {
+    'Regression':'valid/corr',
+    'Classification':'valid/auroc'
+}[args.experiment_type]
 
+if args.leave_site_out == True:
+    ckpt = pl.callbacks.ModelCheckpoint(
+        dirpath = f'ModelCheckpoints_LSO/{args.lso_main_task}/{experiment_name}/{(strftime("%Y_%m_%d_%H_%M_%S", gmtime()))}/',
+        monitor=monitor,
+        save_top_k=5,
+        save_last=True,
+        filename=f'checkpoint/{{epoch:02d}}-{{{monitor}:.4f}}',
+        mode='max',
+    )
+else:
+    ckpt = pl.callbacks.ModelCheckpoint(
+        dirpath = f'ModelCheckpoints/{experiment_name}/{(strftime("%Y_%m_%d_%H_%M_%S", gmtime()))}/',
+        monitor=monitor,
+        save_top_k=5,
+        save_last=True,
+        filename=f'checkpoint/{{epoch:02d}}-{{{monitor}:.4f}}',
+        mode='max',
+    )
 
 # logger = TensorBoardLogger("tb_logs", name=experiment_name)
-wandb_logger = WandbLogger(save_dir = 'wandb',name=experiment_name)
+wandb_logger = WandbLogger(save_dir = 'wandb',name=experiment_name, project='SingletaskNetwork_LSO')
 
 trainer = pl.Trainer(
     fast_dev_run=False,
@@ -110,7 +122,7 @@ wandb_logger.watch(model, log_freq=500)
 
 # trainer.tune(
 #     model, 
-#     datamodule=data_module, 
+#     datamodule=data_module,       
 #     lr_find_kwargs=dict(min_lr=2e-6, max_lr=3e-2, num_training=15),
 # )
 print(f"Batch size: {data_module.batch_size}")

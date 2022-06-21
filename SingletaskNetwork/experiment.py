@@ -72,45 +72,101 @@ def get_regression_df(df, reg_col, limit_samples = None):
 
 
 
-training_df_folder.mkdir(exist_ok=True)
 
 
 ## Leave-Task-Out Training Setup 
 ## LSO training files for categorical target
+
+training_df_folder.mkdir(exist_ok=True)
 for sel_col in categorical_cols:
     df_task_sel = get_min_sampling(df, sel_col, limit_samples=4000)
     df_filt = df[~df.MRID.isin(df_task_sel.MRID)]
 
     curr_folder = training_df_folder / sel_col.replace(" ","_")
     curr_folder.mkdir(exist_ok=True)
+    df_task_sel.to_csv(curr_folder / f'{sel_col.replace(" ","_")}_MAIN.csv', index=False)
 
-    for cat_col_test in list(set(categorical_cols)-set(sel_col)):
+    for cat_col_test in list(set(categorical_cols)-set([sel_col])):
 
         df_tmp = get_min_sampling(df_filt, cat_col_test)
-        df_tmp.to_csv(curr_folder / f'{cat_col_test.replace(" ","_")}.csv', index=False)
+        df_tmp.to_csv(curr_folder / f'{cat_col_test.replace(" ","_")}_CHILD.csv', index=False)
         
-    for reg_col_test in list(set(regression_cols)-set(sel_col)):
+    for reg_col_test in list(set(regression_cols)-set([sel_col])):
         
         df_tmp = get_regression_df(df_filt, reg_col_test)
-        df_tmp.to_csv(curr_folder / f'{reg_col_test.replace(" ","_")}_REG.csv', index=False)
+        df_tmp.to_csv(curr_folder / f'{reg_col_test.replace(" ","_")}_CHILD_REG.csv', index=False)
 
 ## LSO training files for regression target
 for sel_col in regression_cols:
     df_task_sel = get_regression_df(df, sel_col, limit_samples=8000)
     df_filt = df[~df.MRID.isin(df_task_sel.MRID)]
 
-    curr_folder = training_df_folder / sel_col.replace(" ","_")
+    curr_folder = training_df_folder / (sel_col.replace(" ","_")+'_REG')
     curr_folder.mkdir(exist_ok=True)
+    df_task_sel.to_csv(curr_folder / f'{sel_col.replace(" ","_")}_MAIN_REG.csv', index=False)
 
-    for cat_col_test in list(set(categorical_cols)-set(sel_col)):
+    for cat_col_test in list(set(categorical_cols)-set([sel_col])):
 
         df_tmp = get_min_sampling(df_filt, cat_col_test)
-        df_tmp.to_csv(curr_folder / f'{cat_col_test.replace(" ","_")}.csv', index=False)
+        df_tmp.to_csv(curr_folder / f'{cat_col_test.replace(" ","_")}_CHILD.csv', index=False)
         
-    for reg_col_test in list(set(regression_cols)-set(sel_col)):
+    for reg_col_test in list(set(regression_cols)-set([sel_col])):
         
         df_tmp = get_regression_df(df_filt, reg_col_test)
-        df_tmp.to_csv(curr_folder / f'{reg_col_test.replace(" ","_")}_REG.csv', index=False)
+        df_tmp.to_csv(curr_folder / f'{reg_col_test.replace(" ","_")}_CHILD_REG.csv', index=False)
+
+
+# model_size = 18
+# batch_size = 8
+# experiment_tag = 'Test_LSO'
+# leave_site_out = True
+# main_task = ''
+# lso_task_type = ''
+
+
+
+
+# task_sel = ['Age_REG', 'Hypertension_Interpolated']
+
+# for task in task_sel:
+#     task_folder = training_df_folder / task
+#     main_task = task
+
+#     for csv_path in list(task_folder.glob('*.csv')):
+#         name = csv_path.stem
+#         print(name + '_ResNet' + str(model_size))
+#         if 'REG' in name:
+#             type = 'Regression'
+#         else:
+#             type = 'Classification'
+        
+#         if 'CHILD' in name:
+#             lso_task_type = 'Subtask'
+#         elif 'MAIN' in name:
+#             lso_task_type = 'Baseline'
+
+#         df_tmp = pd.read_csv(csv_path)
+#         samples = df_tmp.shape[0]
+#         epochs = 7 + int(10000/samples)
+
+#         submission_string = f"""
+#             qsub -l gpu=1 -l h_vmem=64G -pe threaded 8 submit_lso.sh \
+#             {name} \
+#             {csv_path} \
+#             {model_size} \
+#             {batch_size} \
+#             {name.split("_Inter")[0]} \
+#             {type} \
+#             {experiment_tag} \
+#             {leave_site_out} \
+#             {main_task} \
+#             {lso_task_type} \
+#             {epochs}
+#         """
+
+#         os.system(submission_string)
+
+
 
 
 
@@ -130,21 +186,31 @@ for sel_col in regression_cols:
 #     df_tmp.to_csv(training_df_folder / f'{reg_col.replace(" ","_")}_REG.csv', index=False)
 
 
-model_sizes = [18]
-batch_sizes = [8]
-experiment_tag = 'ONLY_VAL_Augmentations'
+# model_sizes = [18]
+# batch_sizes = [8]
+# experiment_tag = 'ONLY_VAL_Augmentations'
 
 
-for model_size, batch_size in zip(model_sizes, batch_sizes):
-    for csv_path in list(training_df_folder.glob('*.csv')):
-        name = csv_path.stem
-        print(name + '_ResNet' + str(model_size))
-        if 'REG' in name:
-            type = 'Regression'
-        else:
-            type = 'Classification'
-        os.system(f'qsub -l gpu=1 -l h_vmem=64G -pe threaded 8 submit.sh {name} {csv_path} {model_size} {batch_size} {name.split("_Inter")[0]} {type} {experiment_tag}')
+# for model_size, batch_size in zip(model_sizes, batch_sizes):
+#     for csv_path in list(training_df_folder.glob('*.csv')):
+#         name = csv_path.stem
+#         print(name + '_ResNet' + str(model_size))
+#         if 'REG' in name:
+#             type = 'Regression'
+#         else:
+#             type = 'Classification'
 
+#         submission_string = f"""
+#         qsub -l gpu=1 -l h_vmem=64G -pe threaded 8 submit.sh 
+#         {name}
+#         {csv_path} 
+#         {model_size} 
+#         {batch_size} 
+#         {name.split("_Inter")[0]} 
+#         {type} 
+#         {experiment_tag}
+#         """
+#         os.system(submission_string)
 
 # quit = []
 

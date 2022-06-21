@@ -13,6 +13,23 @@ def create_parser():
         help="Type of experiment",
     )
     exp_parser.add_argument(
+        "--leave_site_out",
+        type=bool,
+        default=False,
+        help="Part of the experiment that uses leave-site-out validation",
+    )
+    exp_parser.add_argument(
+        "--lso_main_task",
+        type=str,
+        help="Main task of the leave-site-out experiment",
+    )
+    exp_parser.add_argument(
+        "--lso_task_type",
+        type=str,
+        choices=["Main", "Subtask", 'Baseline'],
+        help="Main or subtask of the leave-site-out experiment",
+    )
+    exp_parser.add_argument(
         "--experiment_tag", type=str, default="None", help="Optional Tag for experiment"
     )
     exp_parser.add_argument(

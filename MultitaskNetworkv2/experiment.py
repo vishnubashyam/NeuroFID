@@ -78,8 +78,8 @@ def get_regression_df(df, reg_col):
 #     df_tmp.to_csv(training_df_folder / f'{reg_col.replace(" ","_")}_REG.csv', index=False)
 
 
-model_sizes = [10, 18, 34, 50]
-batch_sizes = [16, 8, 4, 2]
+model_sizes = [18]
+batch_sizes = [8]
 
 
 

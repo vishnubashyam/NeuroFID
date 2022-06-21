@@ -1,0 +1,14 @@
+
+DataPrep/*
+*.ipynb
+
+*.csv
+*.sh.*
+ModelCheckpoints/
+ModelCheckpoints_LSO/
+pretrained_weights/
+lightning_logs/
+tb_logs/
+wandb/
+weights/
+__pycache__/
